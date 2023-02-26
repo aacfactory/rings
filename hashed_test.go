@@ -29,7 +29,7 @@ func TestHashed(t *testing.T) {
 		fmt.Print(", ")
 	}
 	fmt.Println()
-	prev, active, cancel, ok := hashed.Add(&Item{
+	prev, cLow, cHigh, active, cancel, ok := hashed.Add(&Item{
 		key:   "4",
 		value: 4,
 	})
@@ -37,7 +37,7 @@ func TestHashed(t *testing.T) {
 		fmt.Println(ok)
 		return
 	}
-	fmt.Println("prev:", prev)
+	fmt.Println("prev:", prev, cLow, cHigh)
 	fmt.Println(hashed)
 	active()
 	fmt.Println(hashed)
@@ -45,11 +45,11 @@ func TestHashed(t *testing.T) {
 	fmt.Println(hashed)
 	fmt.Println("-----")
 	for i := 0; i < 5; i++ {
-		_, active, _, _ := hashed.Add(&Item{
+		_, cLow, cHigh, active, _, _ = hashed.Add(&Item{
 			key:   fmt.Sprintf("%d", 4+i),
 			value: 4 + i,
 		})
 		active()
-		fmt.Println(hashed)
+		fmt.Println(hashed, cLow, cHigh)
 	}
 }

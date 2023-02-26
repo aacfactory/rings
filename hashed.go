@@ -109,6 +109,10 @@ func (entries HashRingEntries[E]) Get(n uint64) (entry *HashRingEntry[E], has bo
 }
 
 func NewHashed[E Entry](entries ...E) (v *HashRing[E]) {
+	// todo sort entries 不用这个，在做一个有entry自己决定key是不是接收
+	// todo 还是改这个，然后增加被范围修改过的event，持久化有自己维护，new的参数里需要有范围，或者new里的没有entry，只通过add增加，这样就会触发event。
+	// todo add里判断加在哪里，如果没有指定范围，则必然有event，用sort去找位置，
+	// todo 关于缺失，就缺失呗。
 	hashedEntries := make([]*HashRingEntry[E], 0, 1)
 	if entries != nil && len(entries) > 0 {
 		for _, entry := range entries {
@@ -152,7 +156,7 @@ func (r *HashRing[E]) Get(key []byte) (entry E, has bool) {
 	return
 }
 
-func (r *HashRing[E]) Add(entry E) (prevActive E, active func(), cancel func(), ok bool) {
+func (r *HashRing[E]) Add(entry E) (prevActive E, cLow uint64, cHigh uint64, active func(), cancel func(), ok bool) {
 	r.locker.Lock()
 	defer r.locker.Unlock()
 	if uint64(r.entries.Len()) >= maxEntries {
@@ -179,6 +183,8 @@ func (r *HashRing[E]) Add(entry E) (prevActive E, active func(), cancel func(), 
 		r.entries = append(r.entries, hashed)
 		sort.Sort(r.entries)
 	}
+	cLow = hashed.Low
+	cHigh = hashed.High
 	active = func() {
 		r.locker.Lock()
 		hashed.Active = true
@@ -204,8 +210,57 @@ func (r *HashRing[E]) Add(entry E) (prevActive E, active func(), cancel func(), 
 	return
 }
 
+func (r *HashRing[E]) AddDeclared(entry E, low uint64, high uint64) (ok bool) {
+	r.locker.Lock()
+	defer r.locker.Unlock()
+	if uint64(r.entries.Len()) >= maxEntries {
+		return
+	}
+	hashed := &HashRingEntry[E]{
+		Entry:  entry,
+		Active: true,
+		Low:    low,
+		High:   high,
+	}
+	if r.entries.Len() == 0 {
+		r.entries = append(r.entries, hashed)
+	} else {
+		for _, e := range r.entries {
+			if intersect(e.Low, e.High, low, high) {
+				return
+			}
+		}
+		r.entries = append(r.entries, hashed)
+		sort.Sort(r.entries)
+	}
+	ok = true
+	return
+}
+
 func (r *HashRing[E]) Size() (n int) {
 	n = len(r.entries)
+	return
+}
+
+func (r *HashRing[E]) State(key string) (active bool, low uint64, high uint64, has bool) {
+	for _, entry := range r.entries {
+		if entry.Entry.Key() == key {
+			active = entry.Active
+			low = entry.Low
+			high = entry.High
+			has = true
+			return
+		}
+	}
+	return
+}
+
+func (r *HashRing[E]) States(fn func(key string, active bool, low uint64, high uint64) bool) {
+	for _, entry := range r.entries {
+		if !fn(entry.Entry.Key(), entry.Active, entry.Low, entry.High) {
+			break
+		}
+	}
 	return
 }
 
@@ -217,5 +272,17 @@ func (r *HashRing[E]) String() (s string) {
 		s = s[2:]
 	}
 	s = "[" + s + "]"
+	return
+}
+
+func intersect(sLow uint64, sHigh uint64, tLow uint64, tHigh uint64) (ok bool) {
+	for s := sLow; s < sHigh; s++ {
+		for t := tLow; t < tHigh; t++ {
+			if s == t {
+				ok = true
+				return
+			}
+		}
+	}
 	return
 }
