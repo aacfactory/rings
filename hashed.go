@@ -109,10 +109,6 @@ func (entries HashRingEntries[E]) Get(n uint64) (entry *HashRingEntry[E], has bo
 }
 
 func NewHashed[E Entry](entries ...E) (v *HashRing[E]) {
-	// todo sort entries 不用这个，在做一个有entry自己决定key是不是接收
-	// todo 还是改这个，然后增加被范围修改过的event，持久化有自己维护，new的参数里需要有范围，或者new里的没有entry，只通过add增加，这样就会触发event。
-	// todo add里判断加在哪里，如果没有指定范围，则必然有event，用sort去找位置，
-	// todo 关于缺失，就缺失呗。
 	hashedEntries := make([]*HashRingEntry[E], 0, 1)
 	if entries != nil && len(entries) > 0 {
 		for _, entry := range entries {
